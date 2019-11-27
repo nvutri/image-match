@@ -1,14 +1,15 @@
-from signature_database_base import SignatureDatabaseBase
-from signature_database_base import normalized_distance
-from multiprocessing import cpu_count, Process, Queue
-from multiprocessing.managers import Queue as managerQueue
 import numpy as np
+
+from image_match.signature_database_base import SignatureDatabaseBase
+from image_match.signature_database_base import normalized_distance
+from multiprocessing import cpu_count, Process, Queue
+from multiprocessing import Manager
+managerQueue = Manager().Queue()
 
 
 class SignatureMongo(SignatureDatabaseBase):
-    """MongoDB driver for image-match
+    """MongoDB driver for image-match"""
 
-    """
     def __init__(self, collection, *args, **kwargs):
         """Additional MongoDB setup
 
@@ -113,7 +114,6 @@ class SignatureMongo(SignatureDatabaseBase):
 
         return l
 
-
     def insert_single_record(self, rec):
         self.collection.insert(rec)
 
@@ -170,4 +170,3 @@ def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cur
             # do nothing...the cursor is exhausted
             break
     result_q.put('STOP')
-
