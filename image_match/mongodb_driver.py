@@ -2,21 +2,19 @@ import numpy as np
 
 from image_match.signature_database_base import SignatureDatabaseBase
 from image_match.signature_database_base import normalized_distance
-from pymongo import MongoClient
 from multiprocessing import cpu_count, Process, Queue
 from multiprocessing import Manager
-managerQueue = Manager()
+managerQueue = Manager().Queue()
 
 
 class SignatureMongo(SignatureDatabaseBase):
     """MongoDB driver for image-match"""
 
-    def __init__(self, db, db_collection, *args, **kwargs):
+    def __init__(self, collection, *args, **kwargs):
         """Additional MongoDB setup
 
         Args:
-            db: MongoDB name
-            db_collection: collection name in the db
+            collection (collection): a MongoDB collection instance
             args (Optional): Variable length argument list to pass to base constructor
             kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
@@ -36,11 +34,7 @@ class SignatureMongo(SignatureDatabaseBase):
             ]
 
         """
-        self.mongo_kwargs = kwargs.get('mongo') or dict()
-        self.db = db
-        self.db_collection = db_collection
-        self.mongo_client = MongoClient(**self.mongo_kwargs, connect=False)
-        self.collection = self.mongo_client[db][db_collection]
+        self.collection = collection
         # Extract index fields, if any exist yet
         if self.collection.count() > 0:
             self.index_names = [field for field in self.collection.find_one({}).keys()
@@ -49,7 +43,7 @@ class SignatureMongo(SignatureDatabaseBase):
         super(SignatureMongo, self).__init__(*args, **kwargs)
 
     def search_single_record(self, rec, n_parallel_words=1, word_limit=None,
-                             process_timeout=None, maximum_matches=1000, pre_filter=None):
+                             process_timeout=None, maximum_matches=1000, filter=None):
         if n_parallel_words is None:
             n_parallel_words = cpu_count()
 
@@ -86,9 +80,7 @@ class SignatureMongo(SignatureDatabaseBase):
                     p.append(Process(target=get_next_match,
                                      args=(results_q,
                                            word_pair,
-                                           self.db,
-                                           self.db_collection,
-                                           self.mongo_kwargs,
+                                           self.collection,
                                            np.array(rec['signature']),
                                            self.distance_cutoff,
                                            maximum_matches)))
@@ -140,7 +132,7 @@ class SignatureMongo(SignatureDatabaseBase):
             self.collection.create_index(name)
 
 
-def get_next_match(result_q, word, db, db_collection, mongo_kwargs, signature, cutoff=0.5, max_in_cursor=100):
+def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cursor=100):
     """Given a cursor, iterate through matches
 
     Scans a cursor for word matches below a distance threshold.
@@ -152,17 +144,13 @@ def get_next_match(result_q, word, db, db_collection, mongo_kwargs, signature, c
     Args:
         result_q (multiprocessing.Queue): a multiprocessing queue in which to queue results
         word (dict): {word_name: word_value} dict to scan against
-        db: the mongo db name
-        db_collection (collection): a pymongo collection
-        mongo_kwargs: extra args to connect to mongo
+        collection (collection): a pymongo collection
         signature (numpy.ndarray): signature array to match against
         cutoff (Optional[float]): normalized distance limit (default 0.5)
         max_in_cursor (Optional[int]): if more than max_in_cursor matches are in the cursor,
             ignore this cursor; this column is not discriminatory (default 100)
 
     """
-    mongo_client = MongoClient(**mongo_kwargs, connect=False)
-    collection = mongo_client[db][db_collection]
     curs = collection.find(word, projection=['_id', 'signature', 'path', 'metadata'])
 
     # if the cursor has many matches, then it's probably not a huge help. Get the next one.
@@ -176,12 +164,7 @@ def get_next_match(result_q, word, db, db_collection, mongo_kwargs, signature, c
             rec = curs.next()
             dist = normalized_distance(np.reshape(signature, (1, signature.size)), np.array(rec['signature']))[0]
             if dist < cutoff:
-                matches[rec['_id']] = {
-                    'dist': dist,
-                    'path': rec.get('path'),
-                    'id': rec.get('_id'),
-                    'metadata': rec.get('metadata')
-                }
+                matches[rec['_id']] = {'dist': dist, 'path': rec['path'], 'id': rec['_id'], 'metadata': rec['metadata']}
                 result_q.put(matches)
         except StopIteration:
             # do nothing...the cursor is exhausted

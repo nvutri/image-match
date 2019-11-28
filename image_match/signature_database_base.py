@@ -1,8 +1,7 @@
-import numpy as np
-
 from image_match.goldberg import ImageSignature
 from itertools import product
 from operator import itemgetter
+import numpy as np
 
 
 class SignatureDatabaseBase(object):
