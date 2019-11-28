@@ -4,7 +4,7 @@ from image_match.signature_database_base import SignatureDatabaseBase
 from image_match.signature_database_base import normalized_distance
 from multiprocessing import cpu_count, Process, Queue
 from multiprocessing import Manager
-managerQueue = Manager().Queue()
+managerQueue = Manager()
 
 
 class SignatureMongo(SignatureDatabaseBase):
@@ -43,7 +43,7 @@ class SignatureMongo(SignatureDatabaseBase):
         super(SignatureMongo, self).__init__(*args, **kwargs)
 
     def search_single_record(self, rec, n_parallel_words=1, word_limit=None,
-                             process_timeout=None, maximum_matches=1000, filter=None):
+                             process_timeout=None, maximum_matches=1000, pre_filter=None):
         if n_parallel_words is None:
             n_parallel_words = cpu_count()
 
@@ -164,7 +164,12 @@ def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cur
             rec = curs.next()
             dist = normalized_distance(np.reshape(signature, (1, signature.size)), np.array(rec['signature']))[0]
             if dist < cutoff:
-                matches[rec['_id']] = {'dist': dist, 'path': rec['path'], 'id': rec['_id'], 'metadata': rec['metadata']}
+                matches[rec['_id']] = {
+                    'dist': dist,
+                    'path': rec.get('path'),
+                    'id': rec.get('_id'),
+                    'metadata': rec.get('metadata')
+                }
                 result_q.put(matches)
         except StopIteration:
             # do nothing...the cursor is exhausted
