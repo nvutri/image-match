@@ -1,3 +1,5 @@
+import requests
+
 from skimage.color import rgb2gray
 from skimage.io import imread
 from PIL import Image
@@ -223,6 +225,11 @@ class ImageSignature(object):
                      0.02739059,  0.01954745]])
 
         """
+        if type(image_or_path) in string_types or \
+                type(image_or_path) is text_type:
+            response = requests.get(image_or_path)
+            image_or_path = response.content
+            bytestream = True
         if bytestream:
             try:
                 img = Image.open(BytesIO(image_or_path))
@@ -234,9 +241,6 @@ class ImageSignature(object):
                     raise CorruptImageError()
             img = img.convert('RGB')
             return rgb2gray(np.asarray(img, dtype=np.uint8))
-        elif type(image_or_path) in string_types or \
-             type(image_or_path) is text_type:
-            return imread(image_or_path, as_gray=True)
         elif type(image_or_path) is bytes:
             try:
                 img = Image.open(image_or_path)
@@ -412,7 +416,7 @@ class ImageSignature(object):
                 upper_y_lim = int(min([lower_y_lim + P, image.shape[1]]))
 
                 avg_grey[i, j] = np.mean(image[lower_x_lim:upper_x_lim,
-                                        lower_y_lim:upper_y_lim])  # no smoothing here as in the paper
+                                               lower_y_lim:upper_y_lim])  # no smoothing here as in the paper
 
         return avg_grey
 
